@@ -8,6 +8,8 @@ from prophecy.cb.server.base.DatasetBuilderBase import (
 from prophecy.cb.ui.uispec import *
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType
+from prophecy.cb.migration import PropertyMigrationObj
+import dataclasses
 
 
 class bigquery(DatasetSpec):
@@ -26,7 +28,8 @@ class bigquery(DatasetSpec):
         description: Optional[str] = ""
         credType: str = "none"
         credentialsFile: Optional[str] = None
-        secretsVariable: Optional[str] = None
+        secretsVariable: Optional[str] = None # Deprecated
+        secretsVal: SecretValue = field(default_factory=list)
         isBase64: bool = False
         parentProject: Optional[str] = None
         table: Optional[str] = None
@@ -123,10 +126,8 @@ class bigquery(DatasetSpec):
                                     .then(
                                     StackLayout(direction="vertical", gap="1rem")
                                         .addElement(
-                                        TextBox("Configuration variable name")
-                                            .bindPlaceholder("${config_test_secret}")
-                                            .bindProperty("secretsVariable")
-                                    )
+                                            SecretBox("").bindPlaceholder("").bindProperty("secretsVal")
+                                        )
                                         .addElement(
                                         Checkbox(
                                             "Is secret base64 encoded"
@@ -352,10 +353,8 @@ class bigquery(DatasetSpec):
                                     .then(
                                     StackLayout(direction="vertical", gap="1rem")
                                         .addElement(
-                                        TextBox("Configuration variable name")
-                                            .bindPlaceholder("${config_test_secret}")
-                                            .bindProperty("secretsVariable")
-                                    )
+                                            SecretBox("").bindPlaceholder("").bindProperty("secretsVal")
+                                        )
                                         .addElement(
                                         Checkbox(
                                             "Is secret base64 encoded"
@@ -561,10 +560,10 @@ class bigquery(DatasetSpec):
                     reader = reader.option("credentials", credentials)
                 if self.props.credType == "databricksSecrets":
                     credentials = (
-                        self.props.secretsVariable
+                        self.props.secretsVal
                         if self.props.isBase64
                         else base64.b64encode(
-                            bytes(self.props.secretsVariable, "utf-8")
+                            bytes(self.props.secretsVal, "utf-8")
                         ).decode("utf-8")
                     )
                     reader = reader.option("credentials", credentials)
@@ -667,10 +666,10 @@ class bigquery(DatasetSpec):
                     writer = writer.option("credentials", credentials)
                 if self.props.credType == "databricksSecrets":
                     credentials = (
-                        self.props.secretsVariable
+                        self.props.secretsVal
                         if self.props.isBase64
                         else base64.b64encode(
-                            bytes(self.props.secretsVariable, "utf-8")
+                            bytes(self.props.secretsVal, "utf-8")
                         ).decode("utf-8")
                     )
                     writer = writer.option("credentials", credentials)
@@ -765,3 +764,27 @@ class bigquery(DatasetSpec):
                 writer = writer.mode(self.props.writeMode)
 
             writer.save(self.props.table)
+            
+    def __init__(self):
+        super().__init__()
+        self.registerPropertyEvolution(BigQueryPropertyMigration())
+
+
+class BigQueryPropertyMigration(PropertyMigrationObj):
+
+    def migrationNumber(self) -> int:
+        return 1
+
+    def up(self, old_properties: bigquery.BigQueryProperties) -> bigquery.BigQueryProperties:
+        credType = old_properties.credType
+
+        if credType == "databricksSecrets":
+            secretVar = SecretValuePart.convertTextToSecret(old_properties.secretsVariable)
+
+        return dataclasses.replace(
+            old_properties,
+            secretsVal=secretVar
+        )
+
+    def down(self, new_properties: bigquery.BigQueryProperties) -> bigquery.BigQueryProperties:
+        raise Exception("Downgrade is not implemented for this BigQuery version")

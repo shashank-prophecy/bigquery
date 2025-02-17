@@ -25,7 +25,7 @@
       }
     },
     "language" : "python",
-    "fabricId" : "10209",
+    "fabricId" : "10061",
     "frontEndLanguage" : "sql",
     "mode" : "batch",
     "udfs" : {
