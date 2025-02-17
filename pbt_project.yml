@@ -1,6 +1,6 @@
 name: BigQuery_Project_1
 description: ''
-version: 0.0.1
+version: '1.0'
 author: shashank@prophecy.io
 language: python
 buildSystem: ''
